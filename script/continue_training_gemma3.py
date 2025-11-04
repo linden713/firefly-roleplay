@@ -1,3 +1,4 @@
+import argparse
 from unsloth import FastModel
 from utils.utils import load_chatml_dataset, check_conversation_lengths, load_params
 from trl import SFTTrainer, SFTConfig
@@ -5,17 +6,30 @@ from utils.utils import EvalCallback, formatting_prompts_func
 from datasets import Dataset
 from unsloth.chat_templates import train_on_responses_only, get_chat_template
 
+# Argument parser
+parser = argparse.ArgumentParser(description="Fine-tuning script for Gemma-3N with language option.")
+parser.add_argument("--lang", type=str, choices=["ch", "en"], default="ch", help="Language to use for training (ch or en)")
+args = parser.parse_args()
+
 # Only read generation from a shared YAML; everything else is inlined below
 gen_cfg = load_params("generation")
 
 max_seq_length = 1024
-DATASET = "dataset/continue_pertrian_CH.jsonl"
 
-# Define evaluation messages
-eval_messages = [
-    {"role": "system", "content": "你是崩坏星穹铁道的角色流萤，请始终保持角色设定和语气"},
-    {"role": "user", "content": "开拓者：流萤，你有什么一直想实现的愿望吗？"},
-]
+if args.lang == "ch":
+    DATASET = "dataset/continue_pertrian_CH.jsonl"
+    # Define evaluation messages
+    eval_messages = [
+        {"role": "system", "content": "你是崩坏星穹铁道的角色流萤，请始终保持角色设定和语气"},
+        {"role": "user", "content": "开拓者：流萤，你有什么一直想实现的愿望吗？"},
+    ]
+else:
+    DATASET = "dataset/continue_pertrian_EN.jsonl"
+    # Define evaluation messages
+    eval_messages = [
+        {"role": "system", "content": "You are the character Firefly from Honkai: Star Rail. Always stay in character and speak in their tone and personality."},
+        {"role": "user", "content": "Trailblazer: Firefly, do you have something you've always wanted to do?"},
+    ]
 
 print("📚 正在加载模型和分词器...")
 model, tokenizer = FastModel.from_pretrained(
@@ -132,4 +146,4 @@ trainer_stats = trainer.train()
 print("🎊 所有任务完成！")
 
 # Save Float16
-model.save_pretrained_merged("gemma-3N-finetune", tokenizer)
+model.save_pretrained_merged(f"gemma-3N-finetune-{args.lang.upper()}", tokenizer)

@@ -2,26 +2,24 @@ import gradio as gr
 from unsloth import FastModel
 from transformers import TextIteratorStreamer
 from threading import Thread
-from init_prompt import SYSTEM_PROMPT, Original_system_prompt, TEST, NORMAL, CONTINUE_LEARN
-from utils import load_params
+from utils.init_prompt import SYSTEM_PROMPT, Original_system_prompt, TEST, NORMAL
+from utils.utils import load_params
 import re
 import os
 
 # To disable the parallelism warning from tokenizers
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-params = load_params("inference")
-
 # Only keep generation from shared YAML; hardcode the rest
-gen_cfg = load_params("generation").generation
+gen_cfg = load_params("generation")
 
 # Direct values (no cfg wrappers)
 model_name = "unsloth/gemma-3n-E4B-it"
-seq_length = 4096
+seq_length = 2048
 load_in_4bit = True
 full_finetuning = False
 device_map = {"": "cuda:0"}
-system_prompt_key = "CONTINUE_LEARN"
+system_prompt_key = "NORMAL"
 
 model, tokenizer = FastModel.from_pretrained(
     model_name=model_name,
@@ -42,10 +40,9 @@ def chat_interaction_stream(user_input, history):
         "Original_system_prompt": Original_system_prompt,
         "TEST": TEST,
         "NORMAL": NORMAL,
-        "CONTINUE_LEARN": CONTINUE_LEARN,
     }
     system_key = system_prompt_key
-    system_prompt = prompt_map.get(system_key, CONTINUE_LEARN)
+    system_prompt = prompt_map.get(system_key, NORMAL)
     messages = [{"role": "system", "content": system_prompt}]
     for user_msg, bot_msg in history:
         messages.append({"role": "user", "content": f"开拓者: {user_msg}"})

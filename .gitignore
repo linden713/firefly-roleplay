@@ -215,3 +215,4 @@ dataset/
 *model*
 *.jsonl
 unsloth_compiled_cache
+*gemma-3N-finetune*
