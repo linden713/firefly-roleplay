@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+
 import json
 import argparse
 import re
 from pathlib import Path
+
+RE_RUBY_OPEN = re.compile(r"\{RUBY_B#[^}]*\}")
+RE_RUBY_CLOSE = re.compile(r"\{RUBY_E#\}")
 
 def clean_text(text):
     """
@@ -13,6 +17,9 @@ def clean_text(text):
     
     # Remove HTML-style tags, e.g., </color>, <color=xxx>, etc.
     text = re.sub(r'<[^>]*>', '', text)
+    # Remove RUBY annotations like: {RUBY_B#纷争之泰坦}尼卡多利{RUBY_E#}
+    text = RE_RUBY_OPEN.sub('', text)
+    text = RE_RUBY_CLOSE.sub('', text)
     
     # Normalize and trim extra whitespace
     text = re.sub(r'\s+', ' ', text).strip()

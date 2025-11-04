@@ -12,20 +12,23 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 params = load_params("inference")
 
-model_cfg = params.get("model", {})
-gen_cfg = params.get("generation", {})
-device_cfg = params.get("device", {})
-chat_cfg = params.get("chat", {})
+# Only keep generation from shared YAML; hardcode the rest
+gen_cfg = load_params("generation").generation
 
-model_name = model_cfg.get("name", "unsloth/gemma-3n-E4B-it")
-seq_lenth = int(model_cfg.get("max_seq_length", 4096))
+# Direct values (no cfg wrappers)
+model_name = "unsloth/gemma-3n-E4B-it"
+seq_length = 4096
+load_in_4bit = True
+full_finetuning = False
+device_map = {"": "cuda:0"}
+system_prompt_key = "CONTINUE_LEARN"
 
 model, tokenizer = FastModel.from_pretrained(
     model_name=model_name,
-    max_seq_length=seq_lenth,
-    load_in_4bit=bool(model_cfg.get("load_in_4bit", True)),
-    full_finetuning=bool(model_cfg.get("full_finetuning", False)),
-    device_map=device_cfg.get("device_map", {"": "cuda:0"}),
+    max_seq_length=seq_length,
+    load_in_4bit=load_in_4bit,
+    full_finetuning=full_finetuning,
+    device_map=device_map,
 )
 model.eval()
 
@@ -41,7 +44,7 @@ def chat_interaction_stream(user_input, history):
         "NORMAL": NORMAL,
         "CONTINUE_LEARN": CONTINUE_LEARN,
     }
-    system_key = chat_cfg.get("system_prompt_key", "CONTINUE_LEARN")
+    system_key = system_prompt_key
     system_prompt = prompt_map.get(system_key, CONTINUE_LEARN)
     messages = [{"role": "system", "content": system_prompt}]
     for user_msg, bot_msg in history:
@@ -69,13 +72,13 @@ def chat_interaction_stream(user_input, history):
     generation_kwargs = dict(
         **inputs,
         streamer=streamer,
-        max_new_tokens=int(gen_cfg.get("max_new_tokens", seq_lenth)),
-        temperature=float(gen_cfg.get("temperature", 1.0)),
-        top_p=float(gen_cfg.get("top_p", 0.95)),
-        top_k=int(gen_cfg.get("top_k", 64)),
-        repetition_penalty=float(gen_cfg.get("repetition_penalty", 1.0)),
+        max_new_tokens=gen_cfg.max_new_tokens,
+        temperature=gen_cfg.temperature,
+        top_p=gen_cfg.top_p,
+        top_k=gen_cfg.top_k,
+        repetition_penalty=1.0,
         pad_token_id=tokenizer.eos_token_id,
-        do_sample=bool(gen_cfg.get("do_sample", True)),
+        do_sample=gen_cfg.do_sample,
     )
     
     # 5. Create and start a new thread to run model.generate
