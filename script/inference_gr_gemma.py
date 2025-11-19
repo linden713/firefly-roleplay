@@ -1,5 +1,6 @@
 import gradio as gr
 from unsloth import FastModel
+from unsloth.chat_templates import get_chat_template
 from transformers import TextIteratorStreamer
 from threading import Thread
 from utils.init_prompt import SYSTEM_PROMPT, Original_system_prompt, TEST, NORMAL
@@ -28,6 +29,8 @@ model, tokenizer = FastModel.from_pretrained(
     full_finetuning=full_finetuning,
     device_map=device_map,
 )
+# Force Gemma-3 chat template for consistency
+tokenizer = get_chat_template(tokenizer, chat_template="gemma-3")
 model.eval()
 
 print("✅ 模型加载完成！")

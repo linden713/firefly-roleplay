@@ -39,7 +39,9 @@ For more detailed information on the data processing methods, please refer to: h
 
 - **`inference_gr_gemma.py`**: Launch a Gradio interface for inference with the trained model.
 
-
+  ```bash
+  python script/inference_gr_gemma.py
+  ```
 
 
 © All rights reserved by miHoYo
