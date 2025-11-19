@@ -292,8 +292,8 @@ def enforce_strict_user_assistant_pairs(seq):
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-turn dialogue data generation (starts with user, ends with assistant; assistant messages globally unique by sentence, high-speed version)")
-    parser.add_argument("--input", "-i", default="dataset/raw/SR_Talk_CH.json") 
-    parser.add_argument("--output", "-o", default="dataset/continue_pertrian_CH.jsonl")
+    parser.add_argument("--input", "-i", default="/home/lch/firefly-roleplay/dataset/raw/SR_Talk_CH.json") 
+    parser.add_argument("--output", "-o", default="/home/lch/firefly-roleplay/dataset/continue_pertrian_CH.jsonl")
     parser.add_argument("--target-len", "-t", type=int, default=6)
     parser.add_argument("--raw-window", "-w", type=int, default=12)
     parser.add_argument("--lang", choices=["zh", "en"], default="zh", help="Output language affects system prompts, punctuation, and default speaker names")

@@ -126,10 +126,10 @@ def extract_firefly_chatml_data(input_file, output_file, context_window=3):
 def main():
     parser = argparse.ArgumentParser(description="提取流萤台词生成ChatML数据集")
     parser.add_argument("--input", "-i", 
-                       default="dataset/raw/SR_Talk_CH.json",
+                       default="/home/lch/firefly-qwen-roleplay/dataset/raw/SR_Talk_CH.json",
                        help="输入JSON文件路径")
     parser.add_argument("--output", "-o",
-                       default="dataset/firefly_chatml_story_dataset.jsonl", 
+                       default="/home/lch/firefly-qwen-roleplay/dataset/firefly_chatml_story_dataset.jsonl", 
                        help="输出JSONL文件路径")
     parser.add_argument("--context-window", "-c", type=int, default=3,
                        help="上下文窗口大小（默认3）")
