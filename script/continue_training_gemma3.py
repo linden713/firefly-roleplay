@@ -4,32 +4,27 @@ from utils.utils import load_chatml_dataset, check_conversation_lengths, load_pa
 from trl import SFTTrainer, SFTConfig
 from utils.utils import EvalCallback, formatting_prompts_func
 from datasets import Dataset
-from unsloth.chat_templates import train_on_responses_only, get_chat_template
+from unsloth.chat_templates import train_on_responses_only, get_chat_template, standardize_data_formats
 
-# Argument parser
-parser = argparse.ArgumentParser(description="Fine-tuning script for Gemma-3N with language option.")
-parser.add_argument("--lang", type=str, choices=["ch", "en"], default="ch", help="Language to use for training (ch or en)")
-args = parser.parse_args()
+# Argument parser removed as we are training on both languages
+# parser = argparse.ArgumentParser(description="Fine-tuning script for Gemma-3N with language option.")
+# parser.add_argument("--lang", type=str, choices=["ch", "en"], default="ch", help="Language to use for training (ch or en)")
+# args = parser.parse_args()
 
 # Only read generation from a shared YAML; everything else is inlined below
 gen_cfg = load_params("generation")
 
-max_seq_length = 1024
+max_seq_length = 1500
 
-if args.lang == "ch":
-    DATASET = "dataset/continue_pertrian_CH.jsonl"
-    # Define evaluation messages
-    eval_messages = [
-        {"role": "system", "content": "你是崩坏星穹铁道的角色流萤，请始终保持角色设定和语气"},
-        {"role": "user", "content": "开拓者：流萤，你有什么一直想实现的愿望吗？"},
-    ]
-else:
-    DATASET = "dataset/continue_pertrian_EN.jsonl"
-    # Define evaluation messages
-    eval_messages = [
-        {"role": "system", "content": "You are the character Firefly from Honkai: Star Rail. Always stay in character and speak in their tone and personality."},
-        {"role": "user", "content": "Trailblazer: Firefly, do you have something you've always wanted to do?"},
-    ]
+# Define evaluation messages
+eval_messages_ch = [
+    {"role": "system", "content": "你是崩坏星穹铁道的角色流萤，请始终保持角色设定和语气"},
+    {"role": "user", "content": "开拓者：流萤，你有什么一直想实现的愿望吗？"},
+]
+eval_messages_en = [
+    {"role": "system", "content": "You are the character Firefly from Honkai: Star Rail. Always stay in character and speak in their tone and personality."},
+    {"role": "user", "content": "Trailblazer: Firefly, do you have something you've always wanted to do?"},
+]
 
 print("📚 正在加载模型和分词器...")
 model, tokenizer = FastModel.from_pretrained(
@@ -63,17 +58,20 @@ print("✅ LoRA适配器配置完成")
 print("🔄 正在格式化训练数据...")
 tokenizer = get_chat_template(tokenizer, chat_template="gemma-3")
 # Load dataset
-dataset_path = DATASET
-dataset_dict = load_chatml_dataset(dataset_path)
-
-dataset = dataset_dict["conversations"]
+# Load dataset
+print("📚 正在加载数据集...")
+dataset_ch = load_chatml_dataset("dataset/continue_pertrian_CH.jsonl")["conversations"]
+dataset_en = load_chatml_dataset("dataset/continue_pertrian_EN.jsonl")["conversations"]
+dataset = dataset_ch + dataset_en
+print(f"✅ 数据集加载完成，共 {len(dataset)} 条对话 (CH: {len(dataset_ch)}, EN: {len(dataset_en)})")
 print("✅ 数据集格式化完成")
 
 # Check token lengths of dataset
-check_conversation_lengths(dataset, tokenizer)
+# check_conversation_lengths(dataset, tokenizer)
 
 # Split 5% validation set
 full_dataset = Dataset.from_dict({"conversations": dataset})
+full_dataset = standardize_data_formats(full_dataset)
 test_size = 0.05
 split_seed = 42
 train_val_split = full_dataset.train_test_split(test_size=test_size, seed=split_seed)
@@ -107,7 +105,7 @@ trainer = SFTTrainer(
     args=SFTConfig(
         dataset_text_field="text",
 
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=16,
         gradient_accumulation_steps=4,
         warmup_ratio=0.05,
         num_train_epochs=1,
@@ -136,7 +134,7 @@ trainer = train_on_responses_only(
     response_part="<start_of_turn>model\n",
 )
 # Add evaluation callback
-eval_callback = EvalCallback(model, tokenizer, eval_messages, gen_config=gen_cfg)
+eval_callback = EvalCallback(model, tokenizer, eval_messages_ch + eval_messages_en, gen_config=gen_cfg)
 trainer.add_callback(eval_callback)
 print("✅ 训练器初始化完成")
 # print(tokenizer.decode(trainer.train_dataset[100]["input_ids"]))
@@ -146,4 +144,4 @@ trainer_stats = trainer.train()
 print("🎊 所有任务完成！")
 
 # Save Float16
-model.save_pretrained_merged(f"gemma-3N-finetune-{args.lang.upper()}", tokenizer)
+# model.save_pretrained_merged("gemma-3N-finetune-MIX", tokenizer)

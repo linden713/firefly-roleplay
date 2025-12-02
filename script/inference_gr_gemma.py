@@ -1,7 +1,7 @@
 import gradio as gr
 from unsloth import FastModel
 from unsloth.chat_templates import get_chat_template
-from transformers import TextIteratorStreamer
+from transformers import TextIteratorStreamer, StoppingCriteria, StoppingCriteriaList
 from threading import Thread
 from utils.init_prompt import SYSTEM_PROMPT, Original_system_prompt, TEST, NORMAL
 from utils.utils import load_params
@@ -17,10 +17,10 @@ gen_cfg = load_params("generation")
 # Direct values (no cfg wrappers)
 model_name = "unsloth/gemma-3n-E4B-it"
 seq_length = 2048
-load_in_4bit = True
-full_finetuning = False
+load_in_4bit = False #True
+full_finetuning = True #False
 device_map = {"": "cuda:0"}
-system_prompt_key = "NORMAL"
+system_prompt_key = "TEST"
 
 model, tokenizer = FastModel.from_pretrained(
     model_name=model_name,
@@ -30,10 +30,17 @@ model, tokenizer = FastModel.from_pretrained(
     device_map=device_map,
 )
 # Force Gemma-3 chat template for consistency
+model.load_adapter("outputs/CH/checkpoint-735")
 tokenizer = get_chat_template(tokenizer, chat_template="gemma-3")
 model.eval()
 
 print("✅ 模型加载完成！")
+
+class StopOnSignal(StoppingCriteria):
+    def __init__(self, stop_signal):
+        self.stop_signal = stop_signal
+    def __call__(self, input_ids, scores, **kwargs):
+        return self.stop_signal[0]
 
 # --- Define Gradio interaction function (generator version) ---
 def chat_interaction_stream(user_input, history):
@@ -44,8 +51,7 @@ def chat_interaction_stream(user_input, history):
         "TEST": TEST,
         "NORMAL": NORMAL,
     }
-    system_key = system_prompt_key
-    system_prompt = prompt_map.get(system_key, NORMAL)
+    system_prompt = prompt_map.get(system_prompt_key, NORMAL)
     messages = [{"role": "system", "content": system_prompt}]
     for user_msg, bot_msg in history:
         messages.append({"role": "user", "content": f"开拓者: {user_msg}"})
@@ -56,7 +62,7 @@ def chat_interaction_stream(user_input, history):
     text = tokenizer.apply_chat_template(
         messages,
         tokenize = False,
-        enable_thinking = True,
+        enable_thinking = False,
         add_generation_prompt = True,
     )
     # Gemma3nProcessor expects `text=` as keyword to avoid binding to `images`.
@@ -68,6 +74,8 @@ def chat_interaction_stream(user_input, history):
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
 
     # 4. Define generation kwargs and pass streamer
+    stop_signal = [False]
+    stopping_criteria = StoppingCriteriaList([StopOnSignal(stop_signal)])
 
     generation_kwargs = dict(
         **inputs,
@@ -76,8 +84,10 @@ def chat_interaction_stream(user_input, history):
         temperature=gen_cfg.temperature,
         top_p=gen_cfg.top_p,
         top_k=gen_cfg.top_k,
-        repetition_penalty=1.0,
-        pad_token_id=tokenizer.eos_token_id,
+        repetition_penalty=getattr(gen_cfg, "repetition_penalty", 1.2),
+        pad_token_id=tokenizer.tokenizer.eos_token_id,
+        eos_token_id=[tokenizer.tokenizer.eos_token_id, tokenizer.tokenizer.convert_tokens_to_ids("<end_of_turn>")],
+        stopping_criteria=stopping_criteria,
         do_sample=gen_cfg.do_sample,
     )
     
@@ -89,29 +99,32 @@ def chat_interaction_stream(user_input, history):
     bot_response = ""
     sentence_buffer = ""
     
-    for new_text in streamer:
-        sentence_buffer += new_text
-        
-        # Check for complete sentences (ending with Chinese period/question/exclamation or English period)
-        sentences = re.split(r'([。！？\.]\s*)', sentence_buffer)
-        
-        # If there are complete sentences, output them
-        if len(sentences) > 1:
-            # Handle all complete sentences
-            for i in range(0, len(sentences) - 1, 2):
-                if i + 1 < len(sentences):
-                    complete_sentence = sentences[i] + sentences[i + 1]
-                    if complete_sentence.strip():
-                        bot_response += complete_sentence
-                        yield bot_response
+    try:
+        for new_text in streamer:
+            sentence_buffer += new_text
             
-            # Keep the last incomplete sentence
-            sentence_buffer = sentences[-1] if sentences else ""
-    
-    # Output the remaining text
-    if sentence_buffer.strip():
-        bot_response += sentence_buffer
-        yield bot_response
+            # Check for complete sentences (ending with Chinese period/question/exclamation or English period)
+            sentences = re.split(r'([。！？\.]\s*)', sentence_buffer)
+            
+            # If there are complete sentences, output them
+            if len(sentences) > 1:
+                # Handle all complete sentences
+                for i in range(0, len(sentences) - 1, 2):
+                    if i + 1 < len(sentences):
+                        complete_sentence = sentences[i] + sentences[i + 1]
+                        if complete_sentence.strip():
+                            bot_response += complete_sentence
+                            yield bot_response
+                
+                # Keep the last incomplete sentence
+                sentence_buffer = sentences[-1] if sentences else ""
+        
+        # Output the remaining text
+        if sentence_buffer.strip():
+            bot_response += sentence_buffer
+            yield bot_response
+    finally:
+        stop_signal[0] = True
 
 # --- Launch Gradio UI ---
 # Use the same Gradio code; it auto-detects normal vs generator function
