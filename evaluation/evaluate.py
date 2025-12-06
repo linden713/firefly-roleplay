@@ -251,7 +251,7 @@ class Evaluator:
 
 def main():
     parser = argparse.ArgumentParser(description="Firefly Roleplay Evaluation Script")
-    parser.add_argument("--model_name", type=str, default="unsloth/gemma-3n-E4B-it", help="Model path or name")
+    parser.add_argument("--adapter_name", type=str, default="unsloth/gemma-3n-E4B-it", help="Model path or name")
     parser.add_argument("--input_file", type=str, default="evaluation/user_query_CH.txt", help="Input file with prompts")
     parser.add_argument("--output_dir", type=str, default="evaluation/evaluation_result", help="Directory to save results")
     parser.add_argument("--batch_size", type=int, default=50, help="Batch size for inference")
@@ -266,7 +266,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # 1. Load Model
-    print(f"Loading model: {args.model_name}")
+    print(f"Loading adapter: {args.adapter_name}")
     # Load params from yaml if needed, but here we might just use defaults or load from file
     # The original notebook loaded 'generation' params.
     try:
@@ -276,14 +276,14 @@ def main():
         exit(1)
     
     model, tokenizer = FastModel.from_pretrained(
-        model_name=args.model_name,
+        adapter_name="unsloth/gemma-3n-E4B-it",
         max_seq_length=2048,
         load_in_4bit=True,
         full_finetuning=False,
         device_map={"": "cuda:0"},
     )
     # model.load_adapter("outputs/highrl/checkpoint-732")  
-    model.load_adapter("outputs/checkpoint-18")
+    model.load_adapter(args.adapter_name)
 
     model.eval()
     

@@ -2,13 +2,14 @@
 
 This project is for role-playing with the Firefly model.
 
+[中文文档 (Chinese Documentation)](README_zh.md) | [English Documentation](README_en.md)
 ## Install
 
 Please follow the [Unsloth Installation Guide](https://docs.unsloth.ai/get-started/install-and-update/conda-install) to set up the environment.
 
 ## Usage
 
-### Data
+### Dataset
 
 The data can be downloaded from: [Firefly-Roleplay Dataset](https://huggingface.co/datasets/linden713/Firefly-Roleplay)
 
@@ -43,6 +44,14 @@ For more detailed information on the data processing methods, please refer to: h
   python script/inference_gr_gemma.py
   ```
 
+### Weight
+
+[Firefly_gemma3n_adapter](https://huggingface.co/linden713/Firefly_gemma3n_adapter/tree/main)
+
+### Edge Deployment
+
+[App](https://github.com/linden713/gallery)
+[Web](TODO)
 
 © All rights reserved by miHoYo
 
