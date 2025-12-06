@@ -136,6 +136,7 @@ class Evaluator:
 
     def knowledge_consistency_score(self, system_key="NORMAL"):
         scores = []
+        details = []
         print("Running Knowledge Consistency Test...")
         for q, expect_keywords in tqdm(KNOWLEDGE_QA, desc="Knowledge QA"):
 
@@ -145,7 +146,14 @@ class Evaluator:
             ans = self.generate_batch([q], system_key=system_key, gen_cfg=gen_cfg, batch_size=1)[0]
             hit = any(k in ans for k in expect_keywords)
             scores.append(1.0 if hit else 0.0)
-        return sum(scores) / len(scores) if scores else 0.0
+            details.append({
+                "question": q,
+                "answer": ans,
+                "expected_keywords": expect_keywords,
+                "hit": hit
+            })
+        score = sum(scores) / len(scores) if scores else 0.0
+        return score, details
 
     def burstiness_score(self, text, max_len=2048):
         enc = self.tokenizer(text=text, return_tensors="pt", truncation=True, max_length=max_len)
@@ -155,7 +163,8 @@ class Evaluator:
             return 0.0
 
         with torch.inference_mode():
-            logits = self.model(tokens.unsqueeze(0)).logits[0, :-1].to(torch.float32)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                logits = self.model(tokens.unsqueeze(0)).logits[0, :-1].to(torch.float32)
             probs = torch.softmax(logits, dim=-1)
             next_probs = probs[range(len(tokens) - 1), tokens[1:]]
             nll = -torch.log(next_probs + 1e-9).cpu().numpy()
@@ -175,7 +184,8 @@ class Evaluator:
         labels[:, :ctx_ids.shape[0]] = -100
 
         with torch.inference_mode():
-            out = self.model(input_ids=input_ids, labels=labels)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                out = self.model(input_ids=input_ids, labels=labels)
             ppl = math.exp(out.loss.item()) if out.loss is not None else float('inf')
         return ppl
 
@@ -272,6 +282,9 @@ def main():
         full_finetuning=False,
         device_map={"": "cuda:0"},
     )
+    # model.load_adapter("outputs/highrl/checkpoint-732")  
+    model.load_adapter("outputs/checkpoint-18")
+
     model.eval()
     
     evaluator = Evaluator(model, tokenizer, enable_rag=args.enable_rag)
@@ -300,7 +313,7 @@ def main():
     global_stats = evaluator.distinct_metrics(responses)
     
     # Knowledge Score (Global)
-    knowledge_score = evaluator.knowledge_consistency_score(system_key=args.system_key)
+    knowledge_score, knowledge_details = evaluator.knowledge_consistency_score(system_key=args.system_key)
     print(f"Knowledge Consistency Score: {knowledge_score:.4f}")
 
     rows = []
@@ -370,6 +383,27 @@ def main():
         f.write(f"- Safety Violation: {report['safety_violation_rate']*100:.1f}%\n")
         f.write(f"- Mean PPL: {report['mean_ppl']:.2f}\n")
         f.write(f"\nDetails saved to: {jsonl_path}\n")
+
+    # Save Conversations
+    conv_md = os.path.join(args.output_dir, f"conversations_{ts}.md")
+    with open(conv_md, "w", encoding="utf-8") as f:
+        f.write(f"# 对话生成记录 ({ts})\n\n")
+        for i, (p, r) in enumerate(zip(prompts, responses), 1):
+            f.write(f"## Sample {i}\n")
+            f.write(f"**User**: {p}\n\n")
+            f.write(f"**Firefly**: {r}\n\n")
+            f.write("---\n")
+
+    # Save Knowledge QA Details
+    kqa_md = os.path.join(args.output_dir, f"knowledge_qa_{ts}.md")
+    with open(kqa_md, "w", encoding="utf-8") as f:
+        f.write(f"# 知识一致性测试详情 ({ts})\n")
+        f.write(f"Score: {knowledge_score:.4f}\n\n")
+        for item in knowledge_details:
+            icon = "✅" if item['hit'] else "❌"
+            f.write(f"## {icon} {item['question']}\n")
+            f.write(f"- **Expected**: {', '.join(item['expected_keywords'])}\n")
+            f.write(f"- **Answer**: {item['answer']}\n\n")
 
     print(f"\nEvaluation Complete!")
     print(f"Report: {report_md}")

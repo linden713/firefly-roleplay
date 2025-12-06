@@ -1,5 +1,6 @@
 import json
 import os
+from unsloth import FastModel
 from typing import Any, Dict, Optional
 
 import torch
@@ -39,6 +40,7 @@ class EvalCallback(TrainerCallback):
         gemma3_top_p = float(self.gen_config.get("top_p", 0.8))
         gemma3_top_k = int(self.gen_config.get("top_k", 20))
 
+        FastModel.for_inference(self.model)
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
@@ -50,6 +52,8 @@ class EvalCallback(TrainerCallback):
                 do_sample=True,
                 streamer=TextStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
             )
+        FastModel.for_training(self.model)
+        torch.cuda.empty_cache()
         print("=" * 50)
     
     def on_save(self, args, state, control, model=None, **kwargs):

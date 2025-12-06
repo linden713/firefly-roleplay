@@ -32,12 +32,15 @@ print("📚 正在加载模型和分词器 (checkpoint-732)...")
 
 model, tokenizer = FastModel.from_pretrained(
     model_name="unsloth/gemma-3n-e4b-it-unsloth-bnb-4bit",
+    # model_name="gemma-3N-continue-learning-4bit",
     max_seq_length=max_seq_length,
     load_in_4bit=True,
     full_finetuning=False,
 )
 # Force Gemma-3 chat template for consistency
-model.load_adapter("outputs/checkpoint-732")
+# model.load_adapter("outputs/highrl/checkpoint-732")
+model.load_adapter("outputs/checkpoint-18")
+
 model.eval()
 
 print("✅ 模型和分词器加载完成")
